@@ -53,7 +53,7 @@ import Distribution.Types.ComponentName (showComponentName)
 import Distribution.Types.UnitId (UnitId)
 import Distribution.Types.UnqualComponentName (UnqualComponentName)
 import Distribution.Verbosity (silent, verboseStderr, verbosityFlags)
-import System.FilePath ((<.>), (</>))
+import System.FilePath ((<.>), (</>), isPathSeparator)
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -195,13 +195,13 @@ listbinAction flags args globalFlags = do
 
         bin_file c = case c of
           CD.ComponentExe s
-            | s == selectedComponent -> [moved_bin_file s]
+            | s == selectedComponent -> [normalizePath (moved_bin_file s)]
           CD.ComponentTest s
-            | s == selectedComponent -> [bin_file' s]
+            | s == selectedComponent -> [normalizePath (bin_file' s)]
           CD.ComponentBench s
-            | s == selectedComponent -> [bin_file' s]
+            | s == selectedComponent -> [normalizePath (bin_file' s)]
           CD.ComponentFLib s
-            | s == selectedComponent -> [flib_file' s]
+            | s == selectedComponent -> [normalizePath (flib_file' s)]
           _ -> []
 
         plat :: Platform
@@ -220,6 +220,21 @@ listbinAction flags args globalFlags = do
             else InstallDirs.bindir (elabInstallDirs elab) </> ("lib" ++ prettyShow s) <.> dllExtension plat
 
         moved_bin_file s = fromMaybe (bin_file' s) (movedExePath selectedComponent distDirLayout elaboratedSharedConfig elab)
+
+        -- msys2 paths allow path styles:
+        --
+        --   * C:/Users/...
+        --   * C:\\Users\\...
+        --
+        -- But not the normally outputted C:\Users\..., so we'll print them in the form
+        -- that can be used directly in an msys2 session by naively translating
+        -- backslashes to forward.
+        normalizePath :: FilePath -> FilePath
+        normalizePath = map normalizePathSep
+
+        normalizePathSep :: Char -> Char
+        normalizePathSep c@'\\' | isPathSeparator c = '/'
+        normalizePathSep c = c
 
 -------------------------------------------------------------------------------
 -- Target Problem: the very similar to CmdRun
